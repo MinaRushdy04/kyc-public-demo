@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local runtime outputs
+outputs/
+mvp2_face_match/outputs/
+
+# Large model and dataset artifacts
+models/
+mvp2_face_match/models/
+prepared_validator_dataset/
+mvp2_face_match/calibration_dataset/
+
+# Generated reports that may leak local paths or sensitive samples
+reports/source_mapping.csv
+reports/hard_negative_augmentation_report.csv
+reports/hard_negative_log.csv
+reports/mvp2_dataset_inventory.csv
+reports/mvp2_pairs.csv
+reports/mvp2_similarity_scores.csv
+mvp2_face_match/reports/face_pairs.csv
+mvp2_face_match/reports/face_similarity_scores.csv
+
+# Temporary debug captures
+*.log

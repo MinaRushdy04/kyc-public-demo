@@ -1,0 +1,20 @@
+mvp_version: MVP2
+task: id_face_vs_selfie_face_similarity
+
+project_dir: D:\Projects\KYC\kyc-validator-training
+dataset_repo: ud-biometrics/Selfie-and-ID-Dataset
+dataset_url: https://huggingface.co/datasets/ud-biometrics/Selfie-and-ID-Dataset
+dataset_license: cc-by-nc-nd-4.0
+raw_dataset_path: D:\Datasets\Selfie_ID_Dataset_hf
+prepared_pairs_csv: D:\Projects\KYC\kyc-validator-training\reports\mvp2_pairs.csv
+
+face_match_model: arcface_onnx
+arcface_onnx_path: D:\Projects\KYC\kyc-validator-training\models\mvp2\arc.onnx
+image_size: 224
+accept_threshold: 0.70
+manual_review_low: 0.50
+manual_review_high: 0.70
+
+liveness_enabled: false
+antispoof_enabled: false
+backend_enabled: false

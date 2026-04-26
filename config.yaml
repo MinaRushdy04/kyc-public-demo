@@ -1,0 +1,22 @@
+mvp_version: MVP1
+task: national_id_vs_not_national_id
+required_side: front
+positive_class: national_id
+negative_class: not_national_id
+accept_threshold: 0.95
+manual_review_enabled: false
+ocr_matching_enabled: false
+image_matching_enabled: false
+
+project_dir: D:\Projects\KYC\kyc-validator-training
+dataset_root: D:\Datasets
+fantasyid_extract_dir: D:\Datasets\FantasyID_extracted
+prepared_dataset_path: D:\Projects\KYC\kyc-validator-training\prepared_validator_dataset
+
+model_name: efficientnetv2_b0
+image_size: 224
+batch_size: 4
+epochs_head: 50
+epochs_finetune: 10
+learning_rate_head: 0.001
+learning_rate_finetune: 0.00001

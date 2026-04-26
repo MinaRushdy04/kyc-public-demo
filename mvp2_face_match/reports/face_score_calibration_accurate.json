@@ -1,0 +1,83 @@
+{
+  "name": "mvp2_accurate_logistic_cosine",
+  "version": 1,
+  "model_profile": "accurate",
+  "raw_metric": "cosine_similarity",
+  "score_output": "calibrated_match_probability_0_100",
+  "calibrator": {
+    "type": "logistic_cosine",
+    "coef": 8.36042296532358,
+    "intercept": -2.3766280022956794
+  },
+  "training_pairs": 396,
+  "positive_pairs": 198,
+  "negative_pairs": 198,
+  "thresholds": {
+    "auto_reject_below": 60.0,
+    "auto_accept_at_or_above": 70.0,
+    "note": "Set from accurate-profile raw score evaluation: threshold 70 had 0 FAR on prototype pairs; threshold 60 kept false rejects low. Rerun evaluate_face_pairs.py --face-profile accurate --write-calibration to recompute exactly."
+  },
+  "score_distribution": {
+    "all": {
+      "count": 396,
+      "min": 1.7145,
+      "p25": 16.487000000000002,
+      "median": 43.8588,
+      "p75": 89.723275,
+      "max": 98.2534
+    },
+    "genuine_same_person": {
+      "count": 198,
+      "min": 31.7702,
+      "p25": 77.452275,
+      "median": 89.80335,
+      "p75": 93.94415,
+      "max": 98.2534
+    },
+    "impostor_different_person": {
+      "count": 198,
+      "min": 1.7145,
+      "p25": 11.2285,
+      "median": 16.4608,
+      "p75": 23.437575000000002,
+      "max": 64.8089
+    }
+  },
+  "roc_auc": 0.9941842669115396,
+  "probability_thresholds": {
+    "auto_reject_below": 40.5,
+    "auto_accept_at_or_above": 54.0,
+    "accept_threshold_metrics": {
+      "threshold": 54.0,
+      "accuracy": 0.9343434343434344,
+      "precision": 0.9831460674157303,
+      "recall": 0.8838383838383839,
+      "f1": 0.9308510638297872,
+      "far_fpr": 0.015151515151515152,
+      "frr_fnr": 0.11616161616161616,
+      "confusion_matrix": {
+        "tn": 195,
+        "fp": 3,
+        "fn": 23,
+        "tp": 175
+      }
+    },
+    "reject_threshold_metrics": {
+      "threshold": 40.5,
+      "auto_reject_count": 194,
+      "true_rejects": 189,
+      "false_rejects": 5,
+      "auto_reject_coverage": 0.4898989898989899,
+      "true_negative_auto_reject_rate": 0.9545454545454546,
+      "frr_fnr": 0.025252525252525252
+    },
+    "target_max_far": 0.02,
+    "target_max_frr": 0.05
+  },
+  "runtime_score_mode": "raw_score_with_calibrated_thresholds",
+  "raw_score_thresholds": {
+    "auto_reject_below": 60.0,
+    "auto_accept_at_or_above": 70.0,
+    "note": "Set from accurate-profile raw score evaluation: threshold 70 had 0 FAR on prototype pairs; threshold 60 kept false rejects low. Rerun evaluate_face_pairs.py --face-profile accurate --write-calibration to recompute exactly."
+  }
+}

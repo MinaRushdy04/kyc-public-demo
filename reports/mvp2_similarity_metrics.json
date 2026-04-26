@@ -1,0 +1,31 @@
+{
+  "model": "arcface_onnx",
+  "valid_pairs": 472,
+  "same_person_pairs": 236,
+  "different_person_pairs": 236,
+  "roc_auc": 0.8001831370295892,
+  "threshold_0_70": {
+    "threshold": 0.7,
+    "accuracy": 0.586864406779661,
+    "precision": 0.8059701492537313,
+    "recall": 0.2288135593220339,
+    "f1": 0.3564356435643564,
+    "false_accepts": 13,
+    "false_rejects": 182,
+    "far": 0.05508474576271186,
+    "frr": 0.7711864406779662
+  },
+  "threshold_target_far_1pct": {
+    "threshold": 0.9632531867752075,
+    "accuracy": 0.5466101694915254,
+    "precision": 0.9230769230769231,
+    "recall": 0.1016949152542373,
+    "f1": 0.183206106870229,
+    "false_accepts": 2,
+    "false_rejects": 212,
+    "far": 0.00847457627118644,
+    "frr": 0.8983050847457628
+  },
+  "id_face_miss_count": 48,
+  "selfie_face_miss_count": 32
+}
