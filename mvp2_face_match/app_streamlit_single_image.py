@@ -24,6 +24,29 @@ def upload_hash(uploaded) -> str:
     return hashlib.sha256(uploaded.getvalue()).hexdigest()
 
 
+def uploads_hash(uploaded_files) -> str:
+    digest = hashlib.sha256()
+    for uploaded in uploaded_files:
+        digest.update(uploaded.name.encode("utf-8", errors="ignore"))
+        digest.update(uploaded.getvalue())
+    return digest.hexdigest()
+
+
+def result_rank(result: dict) -> tuple[int, float, float]:
+    status_rank = {
+        "FINAL_ACCEPT": 5,
+        "FACE_UNCERTAIN": 4,
+        "FACE_MISMATCH": 3,
+        "LOW_QUALITY_ID_FACE": 2,
+        "LOW_QUALITY_ID_CARD": 2,
+        "DOCUMENT_REJECTED": 1,
+        "NO_ID_CARD_FOUND": 0,
+    }
+    document_prob = float(result.get("document", {}).get("national_id_probability") or 0.0)
+    face_score = result.get("face_match", {}).get("score")
+    return (status_rank.get(str(result.get("status", "")), 0), float(face_score or 0.0), document_prob)
+
+
 def read_bgr_if_exists(path: str | Path | None):
     if not path:
         return None
@@ -49,6 +72,8 @@ def show_decision_banner(result: dict) -> None:
         st.warning("Manual review recommended: document passed, but face similarity is not strong enough for auto-accept.")
     elif status == "LOW_QUALITY_ID_FACE":
         st.warning("ID portrait was detected but is too small/blurry for a safe auto decision. Try holding the ID closer, flatter, and steadier.")
+    elif status == "LOW_QUALITY_ID_CARD":
+        st.warning("The ID card crop has too much glare or quality loss. Retake with less reflection and a flatter card angle.")
     elif status == "NO_ID_CARD_FOUND":
         st.error("No reliable ID card crop was found. Move the card closer, reduce glare, and keep all four card edges visible.")
     elif status in {"NO_HOLDER_FACE", "NO_FACE_IN_ID", "MULTIPLE_SELFIE_FACES"}:
@@ -193,12 +218,17 @@ def main() -> None:
     else:
         st.caption("Stable profile: lower RAM use. Best when Windows memory/pagefile pressure is high.")
 
-    uploaded = st.file_uploader("Upload one image: selfie while holding Egyptian National ID", type=["jpg", "jpeg", "png", "bmp", "webp"])
-    if uploaded is None:
-        st.info("Upload a single full image containing both the holder face and the ID card.")
+    uploaded_files = st.file_uploader(
+        "Upload one image, or up to three stills from the same attempt",
+        type=["jpg", "jpeg", "png", "bmp", "webp"],
+        accept_multiple_files=True,
+    )
+    if not uploaded_files:
+        st.info("Upload a full image containing both the holder face and the ID card. A 2-3 image burst can improve best-frame selection.")
         return
+    uploaded_files = uploaded_files[:3]
 
-    file_hash = upload_hash(uploaded)
+    file_hash = uploads_hash(uploaded_files)
     cache = st.session_state.get("single_image_pipeline_cache", {})
     force_run = st.button("Run / rerun pipeline", type="primary")
     needs_run = force_run or cache.get("file_hash") != file_hash or cache.get("face_profile") != face_profile
@@ -206,16 +236,31 @@ def main() -> None:
     if needs_run:
         run_id = f"{int(time.time() * 1000)}_{face_profile}_{file_hash[:10]}"
         temp_dir = ensure_dir(Path(str(cfg["face_project_dir"])) / "outputs" / "debug" / f"single_image_streamlit_{run_id}")
-        image_path = save_upload(uploaded, temp_dir)
-        with st.spinner("Running one-image KYC pipeline in an isolated model process..."):
-            result = run_pipeline_subprocess(image_path, cfg, temp_dir, face_profile)
+        candidates = []
+        with st.spinner("Running KYC pipeline on uploaded stills..."):
+            for idx, uploaded in enumerate(uploaded_files):
+                frame_dir = ensure_dir(temp_dir / f"frame_{idx:02d}")
+                image_path = save_upload(uploaded, frame_dir)
+                result = run_pipeline_subprocess(image_path, cfg, frame_dir, face_profile)
+                candidates.append(
+                    {
+                        "index": idx,
+                        "name": uploaded.name,
+                        "result": result,
+                        "temp_dir": str(frame_dir),
+                        "image_path": str(image_path),
+                    }
+                )
+        best = max(candidates, key=lambda item: result_rank(item["result"]))
         st.session_state["single_image_pipeline_cache"] = {
             "file_hash": file_hash,
             "face_profile": face_profile,
-            "result": result,
-            "temp_dir": str(temp_dir),
-            "image_path": str(image_path),
-            "uploaded_name": uploaded.name,
+            "result": best["result"],
+            "temp_dir": best["temp_dir"],
+            "image_path": best["image_path"],
+            "uploaded_name": best["name"],
+            "selected_index": best["index"],
+            "candidates": candidates,
         }
     else:
         st.caption("Using cached result for this uploaded image. Click Run / rerun pipeline to force a fresh pass.")
@@ -224,6 +269,22 @@ def main() -> None:
     result = cache["result"]
     temp_dir = Path(cache["temp_dir"])
     image_path = Path(cache["image_path"])
+    st.caption(f"Selected frame: `{cache.get('uploaded_name')}`")
+    if len(cache.get("candidates", [])) > 1:
+        st.dataframe(
+            [
+                {
+                    "frame": item["name"],
+                    "status": item["result"].get("status"),
+                    "decision": item["result"].get("final_decision"),
+                    "document_prob": item["result"].get("document", {}).get("national_id_probability"),
+                    "face_score": item["result"].get("face_match", {}).get("score"),
+                }
+                for item in cache["candidates"]
+            ],
+            width="stretch",
+            hide_index=True,
+        )
 
     original_bgr = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
     full_with_bbox = draw_id_bbox(original_bgr, result["document"].get("id_bbox"))
@@ -295,7 +356,8 @@ def main() -> None:
         ],
     )
     if st.button("Save hard case"):
-        saved = save_hard_case(case_type, uploaded, result, temp_dir, cfg)
+        selected_upload = uploaded_files[int(cache.get("selected_index", 0))]
+        saved = save_hard_case(case_type, selected_upload, result, temp_dir, cfg)
         st.success(f"Saved hard case to: {saved}")
 
 

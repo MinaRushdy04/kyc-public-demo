@@ -137,8 +137,11 @@ This pipeline:
 4. Detects the holder face from the original full image, preferring a face outside the ID-card bounding box.
 5. Enhances/upscales the cropped ID card only for ID-portrait detection when needed.
 6. Detects the ID portrait face from the cropped or enhanced ID.
-7. Aligns both faces and compares ArcFace embeddings.
-8. Returns `ACCEPT_FOR_NEXT_STEP`, `MANUAL_REVIEW`, or `REJECT_RETRY`.
+7. Applies quality gates for blur, brightness, glare, face scale, and landmark pose stability.
+8. Aligns both faces and compares ArcFace embeddings.
+9. Returns `ACCEPT_FOR_NEXT_STEP`, `MANUAL_REVIEW`, or `REJECT_RETRY`.
+
+The Streamlit app also accepts up to three still images from the same attempt and selects the strongest frame by document status, face status, and score. This is a practical still-image alternative to video/liveness when the backend cannot stream video.
 
 Important: the result means “KYC step accepted for next stage,” not “identity verified.”
 

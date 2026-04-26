@@ -16,7 +16,7 @@ from modules.face_detector import SCRFDFaceDetector, read_bgr
 from modules.face_embedder import ArcFaceEmbedder
 from modules.id_card_locator import IDCardCandidate, face_anchor_card_candidates, locate_id_card
 from modules.image_enhancement import id_card_enhancement_variants
-from modules.quality import assess_face_quality
+from modules.quality import assess_face_quality, assess_id_card_quality
 from modules.response_schema import LIMITATIONS
 from modules.score_calibration import decision_thresholds, score_similarity
 from modules.similarity import cosine_similarity
@@ -301,6 +301,8 @@ def run_single_image_pipeline(
         warnings.append(reselect_warning)
 
     id_crop_path = _save_debug_crop(debug_root / "id_card_crop.jpg", selected.crop_bgr)
+    card_quality_ok, card_warnings = assess_id_card_quality(selected.crop_bgr, cfg)
+    warnings.extend(card_warnings)
     doc_status = "NATIONAL_ID_ACCEPTED" if selected.national_id_probability >= float(cfg.get("mvp1_accept_threshold", 0.95)) else "DOCUMENT_REJECTED"
     result["document"] = {
         "status": doc_status,
@@ -311,6 +313,15 @@ def run_single_image_pipeline(
 
     if doc_status != "NATIONAL_ID_ACCEPTED":
         result["status"] = "DOCUMENT_REJECTED"
+        if return_debug:
+            result["_debug"] = {"full_bgr": full_bgr, "id_crop": selected.crop_bgr, "holder_crop": None, "id_face_crop": None}
+        return result
+
+    if not card_quality_ok:
+        result["status"] = "LOW_QUALITY_ID_CARD"
+        result["final_decision"] = "REJECT_RETRY"
+        result["face_match"]["status"] = "NOT_RUN"
+        result["quality"]["warnings"] = warnings
         if return_debug:
             result["_debug"] = {"full_bgr": full_bgr, "id_crop": selected.crop_bgr, "holder_crop": None, "id_face_crop": None}
         return result

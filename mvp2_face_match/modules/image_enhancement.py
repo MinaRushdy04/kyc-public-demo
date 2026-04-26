@@ -27,6 +27,13 @@ def clahe_bgr(image_bgr: np.ndarray, clip_limit: float = 2.0) -> np.ndarray:
     return cv2.cvtColor(cv2.merge((enhanced_l, a_chan, b_chan)), cv2.COLOR_LAB2BGR)
 
 
+def gamma_correction(image_bgr: np.ndarray, gamma: float = 1.0) -> np.ndarray:
+    gamma = max(float(gamma), 1e-3)
+    inv_gamma = 1.0 / gamma
+    table = np.array([((i / 255.0) ** inv_gamma) * 255.0 for i in range(256)], dtype=np.uint8)
+    return cv2.LUT(image_bgr, table)
+
+
 def unsharp_mask(image_bgr: np.ndarray, amount: float = 0.55, sigma: float = 1.1) -> np.ndarray:
     blurred = cv2.GaussianBlur(image_bgr, (0, 0), float(sigma))
     return cv2.addWeighted(image_bgr, 1.0 + float(amount), blurred, -float(amount), 0)
@@ -53,8 +60,12 @@ def id_card_enhancement_variants(image_bgr: np.ndarray, cfg: dict) -> list[tuple
     contrast = clahe_bgr(base, clip_limit=float(cfg.get("id_portrait_clahe_clip_limit", 2.0)))
     add("clahe", contrast)
     add("clahe_sharp", unsharp_mask(contrast, amount=float(cfg.get("id_portrait_sharp_amount", 0.55))))
+    if bool(cfg.get("id_portrait_enable_gamma_variants", True)):
+        add("gamma_light_clahe_sharp", unsharp_mask(clahe_bgr(gamma_correction(base, 1.25)), amount=0.45))
+        add("gamma_dark_clahe_sharp", unsharp_mask(clahe_bgr(gamma_correction(base, 0.85)), amount=0.45))
 
-    denoised = mild_denoise(base)
-    add("denoise_clahe_sharp", unsharp_mask(clahe_bgr(denoised), amount=0.45))
+    if bool(cfg.get("id_portrait_enable_denoise_variant", False)):
+        denoised = mild_denoise(base)
+        add("denoise_clahe_sharp", unsharp_mask(clahe_bgr(denoised), amount=0.45))
 
-    return variants
+    return variants[: int(cfg.get("id_portrait_enhance_max_variants", 6))]
