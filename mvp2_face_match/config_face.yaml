@@ -49,10 +49,10 @@ id_portrait_enable_gamma_variants: true
 id_portrait_enable_denoise_variant: false
 id_portrait_clahe_clip_limit: 2.0
 id_portrait_sharp_amount: 0.55
-id_portrait_refine_width_multiplier: 6.0
-id_portrait_refine_max_crop_width_ratio: 0.58
+id_portrait_refine_width_multiplier: 7.2
+id_portrait_refine_max_crop_width_ratio: 0.72
 id_portrait_refine_face_rel_x: 0.24
-id_portrait_refine_face_rel_y: 0.43
+id_portrait_refine_face_rel_y: 0.46
 
 auto_reject_below: 50
 auto_accept_at_or_above: 70
