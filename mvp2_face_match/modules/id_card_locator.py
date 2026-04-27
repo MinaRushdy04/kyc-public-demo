@@ -133,13 +133,13 @@ def find_card_candidates(image_bgr: np.ndarray, cfg: dict) -> list[IDCardCandida
             _add_unique(candidates, seen, _candidate_from_bbox(image_bgr, (x, y, x + bw, y + bh), f"{strategy}_upright_bbox"))
 
     # Last-resort sliding regions for webcam images where the card edge is weak.
-    for scale in (0.35, 0.45, 0.55, 0.70):
+    for scale in (0.28, 0.35, 0.45, 0.55, 0.70):
         crop_w = int(w * scale)
         crop_h = int(crop_w / 1.58)
         if crop_h <= 0 or crop_w <= 0 or crop_h > h:
             continue
-        for cy in (0.45, 0.60, 0.75):
-            for cx in (0.35, 0.50, 0.65):
+        for cy in (0.45, 0.60, 0.75, 0.85):
+            for cx in (0.35, 0.50, 0.65, 0.80, 0.90):
                 x1 = int(w * cx - crop_w / 2)
                 y1 = int(h * cy - crop_h / 2)
                 _add_unique(candidates, seen, _candidate_from_bbox(image_bgr, (x1, y1, x1 + crop_w, y1 + crop_h), "sliding_card_region"))
@@ -151,6 +151,15 @@ def find_card_candidates(image_bgr: np.ndarray, cfg: dict) -> list[IDCardCandida
     candidates.sort(key=lambda c: (c.area_ratio, -abs(c.aspect_ratio - 1.58)), reverse=True)
     candidates = candidates[: max_candidates * 2]
     return candidates
+
+
+def candidate_selection_score(candidate: IDCardCandidate, cfg: dict) -> float:
+    area_weight = float(cfg.get("id_locator_area_penalty_weight", 0.08))
+    aspect_weight = float(cfg.get("id_locator_aspect_penalty_weight", 0.02))
+    target_aspect = float(cfg.get("id_locator_target_aspect", 1.58))
+    area_penalty = candidate.area_ratio * area_weight
+    aspect_penalty = abs(candidate.aspect_ratio - target_aspect) * aspect_weight
+    return float(candidate.national_id_probability) - area_penalty - aspect_penalty
 
 
 def face_anchor_card_candidates(image_bgr: np.ndarray, face_bboxes: list[list[float]]) -> list[IDCardCandidate]:
@@ -185,7 +194,7 @@ def locate_id_card(
     candidates = find_card_candidates(image_bgr, cfg)
     for candidate in candidates:
         candidate.national_id_probability = float(score_fn(candidate.crop_bgr))
-    candidates.sort(key=lambda c: c.national_id_probability, reverse=True)
+    candidates.sort(key=lambda c: candidate_selection_score(c, cfg), reverse=True)
 
     threshold = float(cfg.get("mvp1_accept_threshold", cfg.get("accept_threshold", 0.95)))
     if candidates and candidates[0].national_id_probability >= threshold:

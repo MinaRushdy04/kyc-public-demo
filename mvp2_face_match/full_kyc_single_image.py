@@ -12,7 +12,7 @@ import torch
 from PIL import Image
 
 from modules.face_aligner import align_face, crop_bbox
-from modules.face_detector import SCRFDFaceDetector, read_bgr
+from modules.face_detector import FaceDetection, SCRFDFaceDetector, read_bgr
 from modules.face_embedder import ArcFaceEmbedder
 from modules.id_card_locator import IDCardCandidate, face_anchor_card_candidates, locate_id_card
 from modules.image_enhancement import id_card_enhancement_variants
@@ -130,6 +130,44 @@ def _select_holder_face(faces, id_bbox: list[int], image_shape: tuple[int, int],
     return None, 0, "NO_HOLDER_FACE"
 
 
+def _offset_detection(face: FaceDetection, dx: int, dy: int, image_shape: tuple[int, int]) -> FaceDetection:
+    offset = np.array([float(dx), float(dy)], dtype=np.float32)
+    bbox = face.bbox.copy()
+    bbox[[0, 2]] += float(dx)
+    bbox[[1, 3]] += float(dy)
+    return FaceDetection(
+        bbox=bbox.astype(np.float32),
+        landmarks=(face.landmarks + offset).astype(np.float32),
+        confidence=face.confidence,
+        image_shape=image_shape,
+    )
+
+
+def _detect_holder_faces_in_regions(
+    full_bgr: np.ndarray,
+    id_bbox: list[int],
+    detector: SCRFDFaceDetector,
+    cfg: dict,
+) -> list[FaceDetection]:
+    h, w = full_bgr.shape[:2]
+    ix1, iy1, ix2, iy2 = [int(v) for v in id_bbox]
+    card_h = max(1, iy2 - iy1)
+    y_cut = min(h, max(int(h * 0.65), iy1 + int(card_h * 0.35)))
+    regions = [
+        (0, 0, w - 1, y_cut),
+        (0, 0, max(ix1 - 1, int(w * 0.70)), min(h - 1, max(y_cut, int(h * 0.85)))),
+    ]
+    recovered: list[FaceDetection] = []
+    for x1, y1, x2, y2 in regions:
+        if x2 <= x1 or y2 <= y1:
+            continue
+        crop = full_bgr[y1 : y2 + 1, x1 : x2 + 1]
+        for face in detector.detect(crop):
+            recovered.append(_offset_detection(face, x1, y1, full_bgr.shape[:2]))
+    recovered.sort(key=lambda f: (f.area, f.confidence), reverse=True)
+    return recovered
+
+
 def _candidate_allows_holder_face(candidate: IDCardCandidate, faces, image_shape: tuple[int, int], cfg: dict) -> bool:
     holder_face, _, error = _select_holder_face(faces, candidate.bbox, image_shape, cfg)
     return holder_face is not None and not error
@@ -231,6 +269,55 @@ def _detect_best_id_portrait(
     return best
 
 
+def _refine_card_crop_from_portrait(
+    selected: IDCardCandidate,
+    id_portrait: dict,
+    cfg: dict,
+) -> tuple[list[int], np.ndarray] | None:
+    variant_bgr = id_portrait.get("variant_bgr")
+    face = id_portrait.get("face")
+    if variant_bgr is None or face is None:
+        return None
+    crop_h, crop_w = selected.crop_bgr.shape[:2]
+    variant_h, variant_w = variant_bgr.shape[:2]
+    if crop_w <= 1 or crop_h <= 1 or variant_w <= 1 or variant_h <= 1:
+        return None
+
+    scale_x = crop_w / float(variant_w)
+    scale_y = crop_h / float(variant_h)
+    x1, y1, x2, y2 = [float(v) for v in face.bbox]
+    x1, x2 = x1 * scale_x, x2 * scale_x
+    y1, y2 = y1 * scale_y, y2 * scale_y
+    fw, fh = max(1.0, x2 - x1), max(1.0, y2 - y1)
+    fc_x, fc_y = (x1 + x2) / 2.0, (y1 + y2) / 2.0
+
+    card_w = max(fw * float(cfg.get("id_portrait_refine_width_multiplier", 6.0)), fh * 4.2)
+    card_w = min(card_w, crop_w * float(cfg.get("id_portrait_refine_max_crop_width_ratio", 0.58)))
+    card_h = card_w / float(cfg.get("id_locator_target_aspect", 1.58))
+    rel_x = float(cfg.get("id_portrait_refine_face_rel_x", 0.24))
+    rel_y = float(cfg.get("id_portrait_refine_face_rel_y", 0.43))
+    left = int(round(fc_x - card_w * rel_x))
+    top = int(round(fc_y - card_h * rel_y))
+    right = int(round(left + card_w))
+    bottom = int(round(top + card_h))
+
+    if right > crop_w:
+        left -= right - crop_w
+        right = crop_w
+    if bottom > crop_h:
+        top -= bottom - crop_h
+        bottom = crop_h
+    left, top = max(0, left), max(0, top)
+    right, bottom = min(crop_w, right), min(crop_h, bottom)
+    if right - left < 80 or bottom - top < 45:
+        return None
+
+    sel_x1, sel_y1, _, _ = [int(v) for v in selected.bbox]
+    refined_bbox = [sel_x1 + left, sel_y1 + top, sel_x1 + right, sel_y1 + bottom]
+    refined_crop = selected.crop_bgr[top:bottom, left:right].copy()
+    return refined_bbox, refined_crop
+
+
 def load_face_models(cfg: dict) -> tuple[SCRFDFaceDetector, ArcFaceEmbedder]:
     detector = SCRFDFaceDetector(
         cfg["scrfd_model_path"],
@@ -328,6 +415,12 @@ def run_single_image_pipeline(
 
     holder_face, holder_count, holder_error = _select_holder_face(full_faces, selected.bbox, full_bgr.shape[:2], cfg)
     if holder_error:
+        recovered_faces = _detect_holder_faces_in_regions(full_bgr, selected.bbox, detector, cfg)
+        if recovered_faces:
+            warnings.append("holder_face_recovered_from_upper_region")
+            full_faces = list(full_faces) + recovered_faces
+            holder_face, holder_count, holder_error = _select_holder_face(full_faces, selected.bbox, full_bgr.shape[:2], cfg)
+    if holder_error:
         result["status"] = holder_error
         result["final_decision"] = "REJECT_RETRY"
         warnings.append(holder_error.lower())
@@ -346,6 +439,14 @@ def run_single_image_pipeline(
             holder_crop = crop_bbox(full_bgr, holder_face.bbox)
             result["_debug"] = {"full_bgr": full_bgr, "id_crop": selected.crop_bgr, "holder_crop": holder_crop, "id_face_crop": None}
         return result
+
+    refined = _refine_card_crop_from_portrait(selected, id_portrait, cfg)
+    if refined is not None:
+        refined_bbox, refined_crop = refined
+        refined_path = _save_debug_crop(debug_root / "id_card_crop_refined.jpg", refined_crop)
+        result["document"]["id_bbox"] = refined_bbox
+        result["document"]["id_crop_path"] = refined_path
+        warnings.append("id_card_bbox_refined_from_portrait")
 
     holder_crop = crop_bbox(full_bgr, holder_face.bbox)
     id_face_crop = id_portrait["face_crop"]

@@ -49,6 +49,10 @@ id_portrait_enable_gamma_variants: true
 id_portrait_enable_denoise_variant: false
 id_portrait_clahe_clip_limit: 2.0
 id_portrait_sharp_amount: 0.55
+id_portrait_refine_width_multiplier: 6.0
+id_portrait_refine_max_crop_width_ratio: 0.58
+id_portrait_refine_face_rel_x: 0.24
+id_portrait_refine_face_rel_y: 0.43
 
 auto_reject_below: 50
 auto_accept_at_or_above: 70
@@ -63,6 +67,9 @@ id_locator_max_area_ratio: 0.85
 id_locator_min_aspect: 1.25
 id_locator_max_aspect: 2.25
 id_locator_fallback_full_image: true
+id_locator_target_aspect: 1.58
+id_locator_area_penalty_weight: 0.08
+id_locator_aspect_penalty_weight: 0.02
 
 prototype_dataset_root: D:\Datasets\Selfie_ID_Dataset_hf
 calibration_dataset_root: D:\Projects\KYC\kyc-validator-training\mvp2_face_match\calibration_dataset
